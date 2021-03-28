@@ -265,7 +265,7 @@ class GridWizard():
                 
                 
     
-    def addObstacle(self, nodetype='nodes', nodes = None, N = 100, center=[0, 0], size=1.0, rotate=0.0, refining=2, diffuse=2, faceType=0x0003, faceParam=0):
+    def addObstacle(self, nodetype='nodes', nodes = None, N = 100, center=[0, 0], size=1.0, rotate=0.0, refining=2, diffuse=2, faceType=0x0003, faceParam=0, reshaping=True):
         if nodetype == 'nodes' and not(nodes is None):
             self.obs = {'nodes': nodes.copy(),
                         'path': Path(nodes + [nodes[0]], closed=True),
@@ -305,92 +305,62 @@ class GridWizard():
                     toRem.pop(i)
                     break
         
-        self.checkNeighbors(cellList='reset', printout=False)
-        
-        self.inters = [[], []]
-        toCut = []
-        for i in range(len(self.cells)):
-            if(self.obs['path'].intersects_path(self.cells[i]['path'], filled=False)):
-                toCut.append(i)
-        for i in toCut:
-            print('Reshapping the cell {0}...'.format(i))
-            faceToRem = []
-            newNodes = []
-            for j in range(len(self.cells[i]['faces'])):
-                faceNodes = [[self.cells[i]['faces'][j][0][0][0], self.cells[i]['faces'][j][0][1][0]], [self.cells[i]['faces'][j][0][0][1], self.cells[i]['faces'][j][0][1][1]]]
-                if Path(faceNodes, closed=False).intersects_path(self.obs['path']):
-                    faceToRem.append(j)
-                    xI, yI = 0, 0
-                    for k in range(len(self.obs['nodes'])):
-                        obsNodes = [self.obs['nodes'][k], self.obs['nodes'][(k+1)%len(self.obs['nodes'])]]
-                        if(Path(faceNodes + [faceNodes[0]], closed=True).intersects_path(Path(obsNodes, closed=False)) or
-                           Path([[faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
-                                 [faceNodes[1][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
-                                 [faceNodes[1][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
-                                 [faceNodes[0][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
-                                 [faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]]], closed=True).contains_point(obsNodes[0], transform=None, radius=0.0001)):# or
-#                           Path([[faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
-#                                 [faceNodes[1][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
-#                                 [faceNodes[1][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
-#                                 [faceNodes[0][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
-#                                 [faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]]], closed=True).contains_point(obsNodes[1], transform=None, radius=0.0001)):
-                            xI, yI = self.intersect_segments(faceNodes, obsNodes)
-                            self.inters[0].append(xI)
-                            self.inters[1].append(yI)
-                            newNodes.append([xI, yI])
-                            
-#                            if self.obs['path'].contains_point([self.cells[i]['faces'][j][0][0][0], self.cells[i]['faces'][j][0][1][0]]):
-                            if(self.obs['path'].contains_point([xI + 0.0001*(self.cells[i]['faces'][j][0][0][0] - xI), yI + 0.0001*(self.cells[i]['faces'][j][0][1][0] - yI)])):
-                                x0 = self.cells[i]['faces'][j][0][0][1]
-                                y0 = self.cells[i]['faces'][j][0][1][1]
-                            else:
-                                x0 = self.cells[i]['faces'][j][0][0][0]
-                                y0 = self.cells[i]['faces'][j][0][1][0]
-                            self.cells[i]['faces'].append([
-                                                    [[x0, xI], [y0, yI]], # face-nodes [[x0, x1], [y0, y1]]
-                                                    [(x0 + xI)/2, (y0 + yI)/2], # center coordinate [xc, yc]
-                                                    np.sqrt((xI-x0)**2 + (yI-y0)**2), # face length
-                                                    self.cells[i]['faces'][j][3].copy(), # facenormal vector [u, v]
-                                                    self.cells[i]['faces'][j][4], # face type
-                                                    self.cells[i]['faces'][j][5], # indice of the neighbor cell
-                                                    self.cells[i]['faces'][j][6], # Dirichlet wall parameter
-                                                    ])
-#                            break
-                elif self.obs['path'].contains_path(Path(faceNodes, closed=False)):
-                    faceToRem.append(j)
-                    
-            if len(newNodes) == 2:
-                c = [(newNodes[0][0] + newNodes[1][0])/2, (newNodes[0][1] + newNodes[1][1])/2]
-                d = np.sqrt((newNodes[1][0] - newNodes[0][0])**2 + (newNodes[1][1] - newNodes[0][1])**2)
-                n = [(newNodes[1][1] - newNodes[0][1]) / d, -(newNodes[1][0] - newNodes[0][0]) / d]
-                self.cells[i]['faces'].append([[[newNodes[0][0], newNodes[1][0]], [newNodes[0][1], newNodes[1][1]]], # face-nodes [[x0, x1], [y0, y1]]
-                                                c.copy(), # center coordinate [xc, yc]
-                                                d, # face length
-                                                n.copy(), # facenormal vector [u, v]
-                                                faceType, # face type
-                                                None, # indice of the neighbor cell
-                                                faceParam, # Dirichlet wall parameter
-                                                ])
-                cellNodes = newNodes.copy()
-                for j in range(len(self.cells[i]['nodes'])):
-                    if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
-                        cellNodes.append(self.cells[i]['nodes'][j])
+        if reshaping:
+            self.checkNeighbors(cellList='reset', printout=False)
+            
+            self.inters = [[], []]
+            toCut = []
+            for i in range(len(self.cells)):
+                if(self.obs['path'].intersects_path(self.cells[i]['path'], filled=False)):
+                    toCut.append(i)
+            for i in toCut:
+                print('Reshapping the cell {0}...'.format(i))
+                faceToRem = []
+                newNodes = []
+                for j in range(len(self.cells[i]['faces'])):
+                    faceNodes = [[self.cells[i]['faces'][j][0][0][0], self.cells[i]['faces'][j][0][1][0]], [self.cells[i]['faces'][j][0][0][1], self.cells[i]['faces'][j][0][1][1]]]
+                    if Path(faceNodes, closed=False).intersects_path(self.obs['path']):
+                        faceToRem.append(j)
+                        xI, yI = 0, 0
+                        for k in range(len(self.obs['nodes'])):
+                            obsNodes = [self.obs['nodes'][k], self.obs['nodes'][(k+1)%len(self.obs['nodes'])]]
+                            if(Path(faceNodes + [faceNodes[0]], closed=True).intersects_path(Path(obsNodes, closed=False)) or
+                               Path([[faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
+                                     [faceNodes[1][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
+                                     [faceNodes[1][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
+                                     [faceNodes[0][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
+                                     [faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]]], closed=True).contains_point(obsNodes[0], transform=None, radius=0.0001)):# or
+    #                           Path([[faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
+    #                                 [faceNodes[1][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] - 0.0001*self.cells[i]['faces'][j][3][1]],
+    #                                 [faceNodes[1][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[1][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
+    #                                 [faceNodes[0][0] + 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] + 0.0001*self.cells[i]['faces'][j][3][1]],
+    #                                 [faceNodes[0][0] - 0.0001*self.cells[i]['faces'][j][3][0], faceNodes[0][1] - 0.0001*self.cells[i]['faces'][j][3][1]]], closed=True).contains_point(obsNodes[1], transform=None, radius=0.0001)):
+                                xI, yI = self.intersect_segments(faceNodes, obsNodes)
+                                self.inters[0].append(xI)
+                                self.inters[1].append(yI)
+                                newNodes.append([xI, yI])
+                                
+    #                            if self.obs['path'].contains_point([self.cells[i]['faces'][j][0][0][0], self.cells[i]['faces'][j][0][1][0]]):
+                                if(self.obs['path'].contains_point([xI + 0.0001*(self.cells[i]['faces'][j][0][0][0] - xI), yI + 0.0001*(self.cells[i]['faces'][j][0][1][0] - yI)])):
+                                    x0 = self.cells[i]['faces'][j][0][0][1]
+                                    y0 = self.cells[i]['faces'][j][0][1][1]
+                                else:
+                                    x0 = self.cells[i]['faces'][j][0][0][0]
+                                    y0 = self.cells[i]['faces'][j][0][1][0]
+                                self.cells[i]['faces'].append([
+                                                        [[x0, xI], [y0, yI]], # face-nodes [[x0, x1], [y0, y1]]
+                                                        [(x0 + xI)/2, (y0 + yI)/2], # center coordinate [xc, yc]
+                                                        np.sqrt((xI-x0)**2 + (yI-y0)**2), # face length
+                                                        self.cells[i]['faces'][j][3].copy(), # facenormal vector [u, v]
+                                                        self.cells[i]['faces'][j][4], # face type
+                                                        self.cells[i]['faces'][j][5], # indice of the neighbor cell
+                                                        self.cells[i]['faces'][j][6], # Dirichlet wall parameter
+                                                        ])
+    #                            break
+                    elif self.obs['path'].contains_path(Path(faceNodes, closed=False)):
+                        faceToRem.append(j)
                         
-            elif len(newNodes) == 3:
-                if newNodes[0] == newNodes[1]:
-                    c = [(newNodes[0][0] + newNodes[2][0])/2, (newNodes[0][1] + newNodes[2][1])/2]
-                    d = np.sqrt((newNodes[2][0] - newNodes[0][0])**2 + (newNodes[2][1] - newNodes[0][1])**2)
-                    n = [(newNodes[2][1] - newNodes[0][1]) / d, -(newNodes[2][0] - newNodes[0][0]) / d]
-                    self.cells[i]['faces'].append([[[newNodes[0][0], newNodes[2][0]], [newNodes[0][1], newNodes[2][1]]], # face-nodes [[x0, x1], [y0, y1]]
-                                                    c.copy(), # center coordinate [xc, yc]
-                                                    d, # face length
-                                                    n.copy(), # facenormal vector [u, v]
-                                                    faceType, # face type
-                                                    None, # indice of the neighbor cell
-                                                    faceParam, # Dirichlet wall parameter
-                                                    ])
-                    cellNodes = [newNodes[0], newNodes[2]]
-                else:
+                if len(newNodes) == 2:
                     c = [(newNodes[0][0] + newNodes[1][0])/2, (newNodes[0][1] + newNodes[1][1])/2]
                     d = np.sqrt((newNodes[1][0] - newNodes[0][0])**2 + (newNodes[1][1] - newNodes[0][1])**2)
                     n = [(newNodes[1][1] - newNodes[0][1]) / d, -(newNodes[1][0] - newNodes[0][0]) / d]
@@ -402,219 +372,250 @@ class GridWizard():
                                                     None, # indice of the neighbor cell
                                                     faceParam, # Dirichlet wall parameter
                                                     ])
-                    cellNodes = [newNodes[0], newNodes[1]]
-                for j in range(len(self.cells[i]['nodes'])):
-                    if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
-                        cellNodes.append(self.cells[i]['nodes'][j])
-                        
-            elif len(newNodes) == 4:
-                extNodes = []
-                cellNodes = []
-                cellNodes2 = []
-                newCouple = []
-                newCouple2 = []
-                whichCell = True # True for the current mitosing cell, False for the product cell
-                for j in range(len(self.cells[i]['nodes'])):
-                    if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
-                        extNodes.append(j) 
-                if len(extNodes) < 2:
-                    print('There is an issue with cell #{0} mitose...'.format(i))
-                cellNodes.append(self.cells[i]['nodes'][extNodes[0]])
-                for j in range(len(extNodes)-1):
-                    if self.obs['path'].intersects_path(Path([self.cells[i]['nodes'][extNodes[j]], self.cells[i]['nodes'][extNodes[j+1]]], closed=False)):
-                        whichCell = not whichCell
-                    if whichCell:
-                        cellNodes.append(self.cells[i]['nodes'][extNodes[j+1]])
+                    cellNodes = newNodes.copy()
+                    for j in range(len(self.cells[i]['nodes'])):
+                        if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
+                            cellNodes.append(self.cells[i]['nodes'][j])
+                            
+                elif len(newNodes) == 3:
+                    if newNodes[0] == newNodes[1]:
+                        c = [(newNodes[0][0] + newNodes[2][0])/2, (newNodes[0][1] + newNodes[2][1])/2]
+                        d = np.sqrt((newNodes[2][0] - newNodes[0][0])**2 + (newNodes[2][1] - newNodes[0][1])**2)
+                        n = [(newNodes[2][1] - newNodes[0][1]) / d, -(newNodes[2][0] - newNodes[0][0]) / d]
+                        self.cells[i]['faces'].append([[[newNodes[0][0], newNodes[2][0]], [newNodes[0][1], newNodes[2][1]]], # face-nodes [[x0, x1], [y0, y1]]
+                                                        c.copy(), # center coordinate [xc, yc]
+                                                        d, # face length
+                                                        n.copy(), # facenormal vector [u, v]
+                                                        faceType, # face type
+                                                        None, # indice of the neighbor cell
+                                                        faceParam, # Dirichlet wall parameter
+                                                        ])
+                        cellNodes = [newNodes[0], newNodes[2]]
                     else:
-                        cellNodes2.append(self.cells[i]['nodes'][extNodes[j+1]])
-#                print(cellNodes)
-#                print(newNodes)
-#                print(cellNodes2)
-                
-#                surfCouple = [self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]),
-#                              self.surface_nodes(cellNodes + [newNodes[0] + newNodes[2]]),
-#                              self.surface_nodes(cellNodes + [newNodes[0] + newNodes[3]]),
-#                              self.surface_nodes(cellNodes + [newNodes[1] + newNodes[2]]),
-#                              self.surface_nodes(cellNodes + [newNodes[1] + newNodes[3]]),
-#                              self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]])
-#                              ]
-#                
-#                if surfCouple.index(max(surfCouple)) == 0: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    newCouple = [0, 1]
-#                elif surfCouple.index(max(surfCouple)) == 1: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    newCouple = [0, 2]
-#                elif surfCouple.index(max(surfCouple)) == 2: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    newCouple = [0, 3]
-#                elif surfCouple.index(max(surfCouple)) == 3: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    newCouple = [1, 2]
-#                elif surfCouple.index(max(surfCouple)) == 4: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    newCouple = [1, 3]
-#                else: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    newCouple = [2, 3]
-#                print(newCouple)
-                
-                for j in range(len(self.cells[i]['faces'])):
-                    for k_ in range(len(cellNodes)):
-                        if((self.cells[i]['faces'][j][0][0][0] == cellNodes[k_][0] and self.cells[i]['faces'][j][0][1][0] == cellNodes[k_][1]) or
-                           (self.cells[i]['faces'][j][0][0][1] == cellNodes[k_][0] and self.cells[i]['faces'][j][0][1][1] == cellNodes[k_][1])):
-                            for k in range(len(newNodes)):
-                                if((self.cells[i]['faces'][j][0][0][0] == newNodes[k][0] and self.cells[i]['faces'][j][0][1][0] == newNodes[k][1]) or
-                                   (self.cells[i]['faces'][j][0][0][1] == newNodes[k][0] and self.cells[i]['faces'][j][0][1][1] == newNodes[k][1])):
-                                    newCouple.append(k)
+                        c = [(newNodes[0][0] + newNodes[1][0])/2, (newNodes[0][1] + newNodes[1][1])/2]
+                        d = np.sqrt((newNodes[1][0] - newNodes[0][0])**2 + (newNodes[1][1] - newNodes[0][1])**2)
+                        n = [(newNodes[1][1] - newNodes[0][1]) / d, -(newNodes[1][0] - newNodes[0][0]) / d]
+                        self.cells[i]['faces'].append([[[newNodes[0][0], newNodes[1][0]], [newNodes[0][1], newNodes[1][1]]], # face-nodes [[x0, x1], [y0, y1]]
+                                                        c.copy(), # center coordinate [xc, yc]
+                                                        d, # face length
+                                                        n.copy(), # facenormal vector [u, v]
+                                                        faceType, # face type
+                                                        None, # indice of the neighbor cell
+                                                        faceParam, # Dirichlet wall parameter
+                                                        ])
+                        cellNodes = [newNodes[0], newNodes[1]]
+                    for j in range(len(self.cells[i]['nodes'])):
+                        if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
+                            cellNodes.append(self.cells[i]['nodes'][j])
                             
-#                print(newCouple)
-                newCouple2 = [i for i in range(4) if i not in newCouple]
-#                print(newCouple2)
-                        
-#                        if len(np.intersect1d([np.array(self.cells[i]['faces'][j][0]).T[0].tolist()], newNodes)) > 0:
-#                            newCouple.append(newNodes.index(np.array(self.cells[i]['faces'][j][0]).T[0]))
-#                        elif len(np.intersect1d([np.array(self.cells[i]['faces'][j][0]).T[1].tolist()], newNodes)) > 0:
-#                            newCouple.append(newNodes.index(np.array(self.cells[i]['faces'][j][0]).T[1]))
+                elif len(newNodes) == 4:
+                    extNodes = []
+                    cellNodes = []
+                    cellNodes2 = []
+                    newCouple = []
+                    newCouple2 = []
+                    whichCell = True # True for the current mitosing cell, False for the product cell
+                    for j in range(len(self.cells[i]['nodes'])):
+                        if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
+                            extNodes.append(j) 
+                    if len(extNodes) < 2:
+                        print('There is an issue with cell #{0} mitose...'.format(i))
+                    cellNodes.append(self.cells[i]['nodes'][extNodes[0]])
+                    for j in range(len(extNodes)-1):
+                        if self.obs['path'].intersects_path(Path([self.cells[i]['nodes'][extNodes[j]], self.cells[i]['nodes'][extNodes[j+1]]], closed=False)):
+                            whichCell = not whichCell
+                        if whichCell:
+                            cellNodes.append(self.cells[i]['nodes'][extNodes[j+1]])
+                        else:
+                            cellNodes2.append(self.cells[i]['nodes'][extNodes[j+1]])
+    #                print(cellNodes)
+    #                print(newNodes)
+    #                print(cellNodes2)
+                    
+    #                surfCouple = [self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]),
+    #                              self.surface_nodes(cellNodes + [newNodes[0] + newNodes[2]]),
+    #                              self.surface_nodes(cellNodes + [newNodes[0] + newNodes[3]]),
+    #                              self.surface_nodes(cellNodes + [newNodes[1] + newNodes[2]]),
+    #                              self.surface_nodes(cellNodes + [newNodes[1] + newNodes[3]]),
+    #                              self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]])
+    #                              ]
+    #                
+    #                if surfCouple.index(max(surfCouple)) == 0: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    newCouple = [0, 1]
+    #                elif surfCouple.index(max(surfCouple)) == 1: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    newCouple = [0, 2]
+    #                elif surfCouple.index(max(surfCouple)) == 2: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    newCouple = [0, 3]
+    #                elif surfCouple.index(max(surfCouple)) == 3: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    newCouple = [1, 2]
+    #                elif surfCouple.index(max(surfCouple)) == 4: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    newCouple = [1, 3]
+    #                else: #self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    newCouple = [2, 3]
+    #                print(newCouple)
+                    
+                    for j in range(len(self.cells[i]['faces'])):
+                        for k_ in range(len(cellNodes)):
+                            if((self.cells[i]['faces'][j][0][0][0] == cellNodes[k_][0] and self.cells[i]['faces'][j][0][1][0] == cellNodes[k_][1]) or
+                               (self.cells[i]['faces'][j][0][0][1] == cellNodes[k_][0] and self.cells[i]['faces'][j][0][1][1] == cellNodes[k_][1])):
+                                for k in range(len(newNodes)):
+                                    if((self.cells[i]['faces'][j][0][0][0] == newNodes[k][0] and self.cells[i]['faces'][j][0][1][0] == newNodes[k][1]) or
+                                       (self.cells[i]['faces'][j][0][0][1] == newNodes[k][0] and self.cells[i]['faces'][j][0][1][1] == newNodes[k][1])):
+                                        newCouple.append(k)
+                                
+    #                print(newCouple)
+                    newCouple2 = [i for i in range(4) if i not in newCouple]
+    #                print(newCouple2)
                             
-                
-                cellNodes = cellNodes + [newNodes[newCouple[0]], newNodes[newCouple[1]]]
-                c = [(newNodes[newCouple[0]][0] + newNodes[newCouple[1]][0])/2, (newNodes[newCouple[0]][1] + newNodes[newCouple[1]][1])/2]
-                d = np.sqrt((newNodes[newCouple[1]][0] - newNodes[newCouple[0]][0])**2 + (newNodes[newCouple[1]][1] - newNodes[newCouple[0]][1])**2)
-                n = [(newNodes[newCouple[1]][1] - newNodes[newCouple[0]][1]) / d, -(newNodes[newCouple[1]][0] - newNodes[newCouple[0]][0]) / d]
-                self.cells[i]['faces'].append([[[newNodes[newCouple[0]][0], newNodes[newCouple[1]][0]], [newNodes[newCouple[0]][1], newNodes[newCouple[1]][1]]], # face-nodes [[x0, x1], [y0, y1]]
-                                                c.copy(), # center coordinate [xc, yc]
-                                                d, # face length
-                                                n.copy(), # facenormal vector [u, v]
-                                                faceType, # face type
-                                                None, # indice of the neighbor cell
-                                                faceParam, # Dirichlet wall parameter
-                                                ])
-                
-                cellNodes2 = cellNodes2 + [newNodes[newCouple2[0]], newNodes[newCouple2[1]]]
-                c = [(newNodes[newCouple2[0]][0] + newNodes[newCouple2[1]][0])/2, (newNodes[newCouple2[0]][1] + newNodes[newCouple2[1]][1])/2]
-                d = np.sqrt((newNodes[newCouple2[1]][0] - newNodes[newCouple2[0]][0])**2 + (newNodes[newCouple2[1]][1] - newNodes[newCouple2[0]][1])**2)
-                n = [(newNodes[newCouple2[1]][1] - newNodes[newCouple2[0]][1]) / d, -(newNodes[newCouple2[1]][0] - newNodes[newCouple2[0]][0]) / d]
-                self.cells[i]['faces'].append([[[newNodes[newCouple2[0]][0], newNodes[newCouple2[1]][0]], [newNodes[newCouple2[0]][1], newNodes[newCouple2[1]][1]]], # face-nodes [[x0, x1], [y0, y1]]
-                                                c.copy(), # center coordinate [xc, yc]
-                                                d, # face length
-                                                n.copy(), # facenormal vector [u, v]
-                                                faceType, # face type
-                                                None, # indice of the neighbor cell
-                                                faceParam, # Dirichlet wall parameter
-                                                ])
-                
-#                if self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
-#                    cellNodes = cellNodes + [newNodes[0], newNodes[1]]
-#                    c = [(newNodes[0][0] + newNodes[1][0])/2, (newNodes[0][1] + newNodes[1][1])/2]
-#                    d = np.sqrt((newNodes[1][0] - newNodes[0][0])**2 + (newNodes[1][1] - newNodes[0][1])**2)
-#                    n = [(newNodes[1][1] - newNodes[0][1]) / d, -(newNodes[1][0] - newNodes[0][0]) / d]
-#                    self.cells[i]['faces'].append([[[newNodes[0][0], newNodes[1][0]], [newNodes[0][1], newNodes[1][1]]], # face-nodes [[x0, x1], [y0, y1]]
-#                                                    c.copy(), # center coordinate [xc, yc]
-#                                                    d, # face length
-#                                                    n.copy(), # facenormal vector [u, v]
-#                                                    faceType, # face type
-#                                                    None, # indice of the neighbor cell
-#                                                    faceParam, # Dirichlet wall parameter
-#                                                    ])
-#                else:
-#                    cellNodes = cellNodes + [newNodes[2], newNodes[3]]
-#                    c = [(newNodes[2][0] + newNodes[3][0])/2, (newNodes[2][1] + newNodes[3][1])/2]
-#                    d = np.sqrt((newNodes[3][0] - newNodes[2][0])**2 + (newNodes[3][1] - newNodes[2][1])**2)
-#                    n = [(newNodes[3][1] - newNodes[2][1]) / d, -(newNodes[3][0] - newNodes[2][0]) / d]
-#                    self.cells[i]['faces'].append([[[newNodes[2][0], newNodes[3][0]], [newNodes[2][1], newNodes[3][1]]], # face-nodes [[x0, x1], [y0, y1]]
-#                                                    c.copy(), # center coordinate [xc, yc]
-#                                                    d, # face length
-#                                                    n.copy(), # facenormal vector [u, v]
-#                                                    faceType, # face type
-#                                                    None, # indice of the neighbor cell
-#                                                    faceParam, # Dirichlet wall parameter
-#                                                    ])
+    #                        if len(np.intersect1d([np.array(self.cells[i]['faces'][j][0]).T[0].tolist()], newNodes)) > 0:
+    #                            newCouple.append(newNodes.index(np.array(self.cells[i]['faces'][j][0]).T[0]))
+    #                        elif len(np.intersect1d([np.array(self.cells[i]['faces'][j][0]).T[1].tolist()], newNodes)) > 0:
+    #                            newCouple.append(newNodes.index(np.array(self.cells[i]['faces'][j][0]).T[1]))
+                                
                     
+                    cellNodes = cellNodes + [newNodes[newCouple[0]], newNodes[newCouple[1]]]
+                    c = [(newNodes[newCouple[0]][0] + newNodes[newCouple[1]][0])/2, (newNodes[newCouple[0]][1] + newNodes[newCouple[1]][1])/2]
+                    d = np.sqrt((newNodes[newCouple[1]][0] - newNodes[newCouple[0]][0])**2 + (newNodes[newCouple[1]][1] - newNodes[newCouple[0]][1])**2)
+                    n = [(newNodes[newCouple[1]][1] - newNodes[newCouple[0]][1]) / d, -(newNodes[newCouple[1]][0] - newNodes[newCouple[0]][0]) / d]
+                    self.cells[i]['faces'].append([[[newNodes[newCouple[0]][0], newNodes[newCouple[1]][0]], [newNodes[newCouple[0]][1], newNodes[newCouple[1]][1]]], # face-nodes [[x0, x1], [y0, y1]]
+                                                    c.copy(), # center coordinate [xc, yc]
+                                                    d, # face length
+                                                    n.copy(), # facenormal vector [u, v]
+                                                    faceType, # face type
+                                                    None, # indice of the neighbor cell
+                                                    faceParam, # Dirichlet wall parameter
+                                                    ])
                     
+                    cellNodes2 = cellNodes2 + [newNodes[newCouple2[0]], newNodes[newCouple2[1]]]
+                    c = [(newNodes[newCouple2[0]][0] + newNodes[newCouple2[1]][0])/2, (newNodes[newCouple2[0]][1] + newNodes[newCouple2[1]][1])/2]
+                    d = np.sqrt((newNodes[newCouple2[1]][0] - newNodes[newCouple2[0]][0])**2 + (newNodes[newCouple2[1]][1] - newNodes[newCouple2[0]][1])**2)
+                    n = [(newNodes[newCouple2[1]][1] - newNodes[newCouple2[0]][1]) / d, -(newNodes[newCouple2[1]][0] - newNodes[newCouple2[0]][0]) / d]
+                    self.cells[i]['faces'].append([[[newNodes[newCouple2[0]][0], newNodes[newCouple2[1]][0]], [newNodes[newCouple2[0]][1], newNodes[newCouple2[1]][1]]], # face-nodes [[x0, x1], [y0, y1]]
+                                                    c.copy(), # center coordinate [xc, yc]
+                                                    d, # face length
+                                                    n.copy(), # facenormal vector [u, v]
+                                                    faceType, # face type
+                                                    None, # indice of the neighbor cell
+                                                    faceParam, # Dirichlet wall parameter
+                                                    ])
                     
-            for j in range(len(faceToRem)):
-                for k in range(len(faceToRem)):
-                    if faceToRem[k] == max(faceToRem):
-                        self.cells[i]['faces'].pop(faceToRem[k])
-                        faceToRem.pop(k)
-                        break
-            
-            # Update the parameters of the cell
-#            cellNodes = newNodes.copy()
-#            for j in range(len(self.cells[i]['nodes'])):
-#                if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
-#                    cellNodes.append(self.cells[i]['nodes'][j])
-            angNodes = []
-            for j in range(len(cellNodes)):
-                scalr = cellNodes[j][0] - self.cells[i]['center'][0]
-                vectl = self.cells[i]['center'][1] - cellNodes[j][1]
-                d = np.sqrt((cellNodes[j][0] - self.cells[i]['center'][0])**2 + (cellNodes[j][1] - self.cells[i]['center'][1])**2)
-                a = np.arccos(scalr/d)
-                if (vectl > 0): a = -a
-                angNodes.append(a)
-            
-            for r in range(len(angNodes)):
-                for s in range(len(angNodes)-1):
-                    if angNodes[s] > angNodes[s+1]:
-                        c = cellNodes[s+1]
-                        a = angNodes[s+1]
-                        cellNodes[s+1] = cellNodes[s]
-                        angNodes[s+1] = angNodes[s]
-                        cellNodes[s] = c
-                        angNodes[s] = a
+    #                if self.surface_nodes(cellNodes + [newNodes[0] + newNodes[1]]) < self.surface_nodes(cellNodes + [newNodes[2] + newNodes[3]]):
+    #                    cellNodes = cellNodes + [newNodes[0], newNodes[1]]
+    #                    c = [(newNodes[0][0] + newNodes[1][0])/2, (newNodes[0][1] + newNodes[1][1])/2]
+    #                    d = np.sqrt((newNodes[1][0] - newNodes[0][0])**2 + (newNodes[1][1] - newNodes[0][1])**2)
+    #                    n = [(newNodes[1][1] - newNodes[0][1]) / d, -(newNodes[1][0] - newNodes[0][0]) / d]
+    #                    self.cells[i]['faces'].append([[[newNodes[0][0], newNodes[1][0]], [newNodes[0][1], newNodes[1][1]]], # face-nodes [[x0, x1], [y0, y1]]
+    #                                                    c.copy(), # center coordinate [xc, yc]
+    #                                                    d, # face length
+    #                                                    n.copy(), # facenormal vector [u, v]
+    #                                                    faceType, # face type
+    #                                                    None, # indice of the neighbor cell
+    #                                                    faceParam, # Dirichlet wall parameter
+    #                                                    ])
+    #                else:
+    #                    cellNodes = cellNodes + [newNodes[2], newNodes[3]]
+    #                    c = [(newNodes[2][0] + newNodes[3][0])/2, (newNodes[2][1] + newNodes[3][1])/2]
+    #                    d = np.sqrt((newNodes[3][0] - newNodes[2][0])**2 + (newNodes[3][1] - newNodes[2][1])**2)
+    #                    n = [(newNodes[3][1] - newNodes[2][1]) / d, -(newNodes[3][0] - newNodes[2][0]) / d]
+    #                    self.cells[i]['faces'].append([[[newNodes[2][0], newNodes[3][0]], [newNodes[2][1], newNodes[3][1]]], # face-nodes [[x0, x1], [y0, y1]]
+    #                                                    c.copy(), # center coordinate [xc, yc]
+    #                                                    d, # face length
+    #                                                    n.copy(), # facenormal vector [u, v]
+    #                                                    faceType, # face type
+    #                                                    None, # indice of the neighbor cell
+    #                                                    faceParam, # Dirichlet wall parameter
+    #                                                    ])
                         
-            if len(newNodes) == 4:
-                angNodes2 = []
-                for j in range(len(cellNodes2)):
-                    scalr = cellNodes2[j][0] - self.cells[i]['center'][0]
-                    vectl = self.cells[i]['center'][1] - cellNodes2[j][1]
-                    d = np.sqrt((cellNodes2[j][0] - self.cells[i]['center'][0])**2 + (cellNodes2[j][1] - self.cells[i]['center'][1])**2)
-                    a = np.arccos(scalr/d)
-                    if (vectl > 0): a = -a
-                    angNodes2.append(a)
-                for r in range(len(angNodes2)):
-                    for s in range(len(angNodes2)-1):
-                        if angNodes2[s] > angNodes2[s+1]:
-                            c = cellNodes2[s+1]
-                            a = angNodes2[s+1]
-                            cellNodes2[s+1] = cellNodes2[s]
-                            angNodes2[s+1] = angNodes2[s]
-                            cellNodes2[s] = c
-                            angNodes2[s] = a
-                
-            
-            self.cells[i]['center'] = self.centers_nodes(cellNodes) #np.average(np.array(cellNodes), axis=0).tolist()
-            self.cells[i]['nodes'] = cellNodes.copy()
-            self.cells[i]['path'] = Path(cellNodes + [cellNodes[0]], closed=True)
-            if self.cells[i]['path'].contains_point([self.cells[i]['faces'][-1][1][0] + 0.0001*self.cells[i]['faces'][-1][3][0], self.cells[i]['faces'][-1][1][1] + 0.0001*self.cells[i]['faces'][-1][3][1]]):
-                self.cells[i]['faces'][-1][3][0] *= -1
-                self.cells[i]['faces'][-1][3][1] *= -1
-            self.cells[i]['surface'] = self.surface_nodes(self.cells[i]['nodes'])
-            self.cells[i]['volume'] = self.cells[i]['surface'] * self.cells[i]['thickness']
-            
-            if len(newNodes) == 4:
-                faceToRem = []
-                for j in range(len(self.cells[i]['faces'])):
-                    if not self.cells[i]['path'].intersects_path(Path([[self.cells[i]['faces'][j][0][0][0], self.cells[i]['faces'][j][0][1][0]],
-                                                                   [self.cells[i]['faces'][j][0][0][1], self.cells[i]['faces'][j][0][1][1]]], closed=False)):
-                        faceToRem.append(j)
-                self.addCell(surface = self.surface_nodes(cellNodes2), 
-                             thickness = self.cells[i]['thickness'], 
-                             nodes=cellNodes2)
-                self.cells[-1]['refine.lvl'] = self.cells[i]['refine.lvl']
-                self.cells[-1]['surface'] = self.surface_nodes(self.cells[-1]['nodes'])
-                self.cells[-1]['volume'] = self.cells[-1]['surface'] * self.cells[-1]['thickness']
-                self.cells[-1]['faces'] = []
-                for j in faceToRem:
-                    self.cells[-1]['faces'].append(self.cells[i]['faces'][j].copy())
-                if self.cells[-1]['path'].contains_point([self.cells[-1]['faces'][-1][1][0] + 0.0001*self.cells[-1]['faces'][-1][3][0], self.cells[-1]['faces'][-1][1][1] + 0.0001*self.cells[-1]['faces'][-1][3][1]]):
-                    self.cells[-1]['faces'][-1][3][0] *= -1
-                    self.cells[-1]['faces'][-1][3][1] *= -1
-            
+                        
+                        
                 for j in range(len(faceToRem)):
                     for k in range(len(faceToRem)):
                         if faceToRem[k] == max(faceToRem):
                             self.cells[i]['faces'].pop(faceToRem[k])
                             faceToRem.pop(k)
                             break
+                
+                # Update the parameters of the cell
+    #            cellNodes = newNodes.copy()
+    #            for j in range(len(self.cells[i]['nodes'])):
+    #                if not self.obs['path'].contains_point(self.cells[i]['nodes'][j]):
+    #                    cellNodes.append(self.cells[i]['nodes'][j])
+                angNodes = []
+                for j in range(len(cellNodes)):
+                    scalr = cellNodes[j][0] - self.cells[i]['center'][0]
+                    vectl = self.cells[i]['center'][1] - cellNodes[j][1]
+                    d = np.sqrt((cellNodes[j][0] - self.cells[i]['center'][0])**2 + (cellNodes[j][1] - self.cells[i]['center'][1])**2)
+                    a = np.arccos(scalr/d)
+                    if (vectl > 0): a = -a
+                    angNodes.append(a)
+                
+                for r in range(len(angNodes)):
+                    for s in range(len(angNodes)-1):
+                        if angNodes[s] > angNodes[s+1]:
+                            c = cellNodes[s+1]
+                            a = angNodes[s+1]
+                            cellNodes[s+1] = cellNodes[s]
+                            angNodes[s+1] = angNodes[s]
+                            cellNodes[s] = c
+                            angNodes[s] = a
+                            
+                if len(newNodes) == 4:
+                    angNodes2 = []
+                    for j in range(len(cellNodes2)):
+                        scalr = cellNodes2[j][0] - self.cells[i]['center'][0]
+                        vectl = self.cells[i]['center'][1] - cellNodes2[j][1]
+                        d = np.sqrt((cellNodes2[j][0] - self.cells[i]['center'][0])**2 + (cellNodes2[j][1] - self.cells[i]['center'][1])**2)
+                        a = np.arccos(scalr/d)
+                        if (vectl > 0): a = -a
+                        angNodes2.append(a)
+                    for r in range(len(angNodes2)):
+                        for s in range(len(angNodes2)-1):
+                            if angNodes2[s] > angNodes2[s+1]:
+                                c = cellNodes2[s+1]
+                                a = angNodes2[s+1]
+                                cellNodes2[s+1] = cellNodes2[s]
+                                angNodes2[s+1] = angNodes2[s]
+                                cellNodes2[s] = c
+                                angNodes2[s] = a
+                    
+                
+                self.cells[i]['center'] = self.centers_nodes(cellNodes) #np.average(np.array(cellNodes), axis=0).tolist()
+                self.cells[i]['nodes'] = cellNodes.copy()
+                self.cells[i]['path'] = Path(cellNodes + [cellNodes[0]], closed=True)
                 if self.cells[i]['path'].contains_point([self.cells[i]['faces'][-1][1][0] + 0.0001*self.cells[i]['faces'][-1][3][0], self.cells[i]['faces'][-1][1][1] + 0.0001*self.cells[i]['faces'][-1][3][1]]):
                     self.cells[i]['faces'][-1][3][0] *= -1
                     self.cells[i]['faces'][-1][3][1] *= -1
+                self.cells[i]['surface'] = self.surface_nodes(self.cells[i]['nodes'])
+                self.cells[i]['volume'] = self.cells[i]['surface'] * self.cells[i]['thickness']
+                
+                if len(newNodes) == 4:
+                    faceToRem = []
+                    for j in range(len(self.cells[i]['faces'])):
+                        if not self.cells[i]['path'].intersects_path(Path([[self.cells[i]['faces'][j][0][0][0], self.cells[i]['faces'][j][0][1][0]],
+                                                                       [self.cells[i]['faces'][j][0][0][1], self.cells[i]['faces'][j][0][1][1]]], closed=False)):
+                            faceToRem.append(j)
+                    self.addCell(surface = self.surface_nodes(cellNodes2), 
+                                 thickness = self.cells[i]['thickness'], 
+                                 nodes=cellNodes2)
+                    self.cells[-1]['refine.lvl'] = self.cells[i]['refine.lvl']
+                    self.cells[-1]['surface'] = self.surface_nodes(self.cells[-1]['nodes'])
+                    self.cells[-1]['volume'] = self.cells[-1]['surface'] * self.cells[-1]['thickness']
+                    self.cells[-1]['faces'] = []
+                    for j in faceToRem:
+                        self.cells[-1]['faces'].append(self.cells[i]['faces'][j].copy())
+                    if self.cells[-1]['path'].contains_point([self.cells[-1]['faces'][-1][1][0] + 0.0001*self.cells[-1]['faces'][-1][3][0], self.cells[-1]['faces'][-1][1][1] + 0.0001*self.cells[-1]['faces'][-1][3][1]]):
+                        self.cells[-1]['faces'][-1][3][0] *= -1
+                        self.cells[-1]['faces'][-1][3][1] *= -1
+                
+                    for j in range(len(faceToRem)):
+                        for k in range(len(faceToRem)):
+                            if faceToRem[k] == max(faceToRem):
+                                self.cells[i]['faces'].pop(faceToRem[k])
+                                faceToRem.pop(k)
+                                break
+                    if self.cells[i]['path'].contains_point([self.cells[i]['faces'][-1][1][0] + 0.0001*self.cells[i]['faces'][-1][3][0], self.cells[i]['faces'][-1][1][1] + 0.0001*self.cells[i]['faces'][-1][3][1]]):
+                        self.cells[i]['faces'][-1][3][0] *= -1
+                        self.cells[i]['faces'][-1][3][1] *= -1
             
             
 
@@ -770,13 +771,13 @@ class GridWizard():
 
 
 if __name__ == '__main__':
-    grid = GridWizard(domain = [-5, 5, -5, 5], NX = 8, NY = 8, thickness = 1.0)
+    grid = GridWizard(domain = [-5, 5, -5, 5], NX = 10, NY = 10, thickness = 1.0)
 #    grid.addObstacle(nodetype='test', nodes=None, size=1.0, refining=2, diffuse=1)
-    grid.addObstacle(nodetype='NACA4', nodes='0015', size=6.0, rotate=-5.0, refining=1, diffuse=1, faceType=grid.FACE_DIRICHLET, faceParam=273.15)
+    grid.addObstacle(nodetype='NACA4', nodes='0025', size=6.0, rotate=-25.0, refining=3, diffuse=1, reshaping = False, faceType=grid.FACE_DIRICHLET, faceParam=273.15)
     
     grid.saveGrid('testGridWizard.dat')
     
-    grid.plotMPL(plotVectors = True,
+    grid.plotMPL(plotVectors = False,
                  plotObs = False,
                  plotCellNum = True,
                  figName = 'testGridWizard.pdf')
